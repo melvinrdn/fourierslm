@@ -1,11 +1,10 @@
 import numpy as np
 import pytest
 
-import fourierslm as fs
-from fourierslm import beam, phase, propagate
+from fourierslm import beam, grid, phase, propagate
 
 LAM, F, PITCH = 1030e-9, 0.2, 8e-6
-X = Y = fs.grid(512, PITCH)
+X = Y = grid(512, PITCH)
 
 
 def test_lens_sign():
@@ -19,11 +18,10 @@ def test_lens_sign():
 def test_grating_steers_the_focus(azimuth, axis):
     angle = 2e-4
     E = beam.gaussian(X, Y, 0.4e-3) * np.exp(1j * phase.grating(X, Y, LAM, angle, azimuth))
-    u = np.linspace(-80e-6, 80e-6, 321)
-    I = np.abs(propagate.focus(E, X, Y, u, u, LAM, F)) ** 2
-    iy, ix = np.unravel_index(np.argmax(I), I.shape)
-    peak = u[ix] if axis == "x" else u[iy]
-    assert abs(peak - F * np.sin(angle)) <= u[1] - u[0]
+    G, x, y = propagate.focus(E, PITCH, LAM, F)
+    I = np.abs(G) ** 2
+    centroid = np.sum(I * (x[None, :] if axis == "x" else y[:, None])) / I.sum()
+    assert np.isclose(centroid, F * np.sin(angle), rtol=1e-3)
 
 
 def test_vortex_winds_once_per_charge():

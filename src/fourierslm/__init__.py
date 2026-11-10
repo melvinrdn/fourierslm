@@ -10,7 +10,7 @@ __all__ = ["beam", "grid", "phase", "propagate"]
 def grid(n: int, pitch: float) -> np.ndarray:
     """Centered pixel coordinates, with the axis on pixel n // 2.
 
-    The same convention as `propagate.focus_fft`, so the phase patterns line up with its output.
+    The same convention as `propagate.focus`, so the phase patterns line up with its output.
 
     Parameters
     ----------

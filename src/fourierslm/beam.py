@@ -37,7 +37,7 @@ def _r2(X, Y, center):
 def gaussian(
     X: np.ndarray, Y: np.ndarray, w: float, power: float = 1.0, center: tuple[float, float] = (0.0, 0.0)
 ) -> np.ndarray:
-    """Gaussian beam with a flat wavefront.
+    """Field of a Gaussian beam with a flat wavefront, not its intensity.
 
     Parameters
     ----------
@@ -61,7 +61,7 @@ def gaussian(
 def flattop(
     X: np.ndarray, Y: np.ndarray, radius: float, power: float = 1.0, center: tuple[float, float] = (0.0, 0.0)
 ) -> np.ndarray:
-    """Uniform beam cut by a circular aperture.
+    """Field of a uniform beam cut by a circular aperture, not its intensity.
 
     Parameters
     ----------

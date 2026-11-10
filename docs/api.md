@@ -24,5 +24,5 @@
 
 ```{eval-rst}
 .. automodule:: fourierslm.propagate
-   :members: focus, focus_fft, free
+   :members: focus, free
 ```

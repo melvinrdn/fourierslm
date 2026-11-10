@@ -1,16 +1,15 @@
 import numpy as np
 
-import fourierslm as fs
-from fourierslm import beam
+from fourierslm import beam, grid
 
 PITCH = 8e-6
-X, Y = fs.grid(512, PITCH), fs.grid(384, PITCH)
+X, Y = grid(512, PITCH), grid(384, PITCH)
 
 
 def test_grid():
-    x = fs.grid(6, 2.0)
+    x = grid(6, 2.0)
     assert np.array_equal(x, [-6, -4, -2, 0, 2, 4])
-    assert fs.grid(5, 1.0)[2] == 0
+    assert grid(5, 1.0)[2] == 0
 
 
 def test_gaussian():

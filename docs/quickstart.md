@@ -17,7 +17,8 @@ dependencies are numpy and scipy.
 - The plane wave is $e^{i(kz - \omega t)}$, so a phase that grows along $+X$ on the SLM moves the focus toward $+x$.
   The constant phase $e^{ikz}$ of the carrier is left out.
 - Coordinates are 1D arrays, (X, Y) on the SLM and (x, y) at the focus, and fields have the shape `(len(Y), len(X))`.
-  `fs.grid(n, pitch)` gives the pixel coordinates, with the axis on pixel `n // 2`.
+  `grid(n, pitch)` gives the pixel coordinates, with the axis on pixel `n // 2`.
+- `beam` gives fields, not intensities, and the widths are radii of the intensity at 1/e².
 - Fields in complex64 are propagated in complex64, about twice as fast, with errors around 10⁻⁶.
 
 ## Example
@@ -31,17 +32,17 @@ charge 1 and a grating that moves the focus by 100 µm along $x$. The focus is a
    import matplotlib.pyplot as plt
    import numpy as np
 
-   import fourierslm as fs
-   from fourierslm import beam, phase, propagate
+   from fourierslm import beam, grid, phase, propagate
 
-   lam, f = 1030e-9, 0.5
-   X, Y = fs.grid(1920, 8e-6), fs.grid(1200, 8e-6)
+   lam, f, pitch = 1030e-9, 0.5, 8e-6
+   X, Y = grid(1920, pitch), grid(1200, pitch)
    pattern = phase.vortex(X, Y, 1) + phase.grating(X, Y, lam, angle=100e-6 / f)
    E = beam.gaussian(X, Y, w=2e-3, power=1.0) * np.exp(1j * pattern)
 
-   x = np.linspace(-50e-6, 250e-6, 241)
-   y = np.linspace(-150e-6, 150e-6, 241)
-   I = beam.intensity(propagate.focus(E, X, Y, x, y, lam, f))
+   E_focus, x, y = propagate.focus(E, pitch, lam, f)
+   sx, sy = (x > -50e-6) & (x < 250e-6), np.abs(y) < 150e-6
+   I = beam.intensity(E_focus[np.ix_(sy, sx)])
+   x, y = x[sx], y[sy]
 
    fig, ax = plt.subplots(1, 2)
    ax[0].imshow(phase.wrap(pattern), extent=[X[0] * 1e3, X[-1] * 1e3, Y[0] * 1e3, Y[-1] * 1e3], origin="lower",

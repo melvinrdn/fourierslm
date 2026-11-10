@@ -2,16 +2,16 @@
 
 ## Grid
 
-The SLM is a grid of square pixels. `fs.grid(n, pitch)` gives the coordinates of its `n` pixels along one axis, with
+The SLM is a grid of square pixels. `grid(n, pitch)` gives the coordinates of its `n` pixels along one axis, with
 the optical axis on pixel `n // 2`. The two axes are separate, so the grid can be rectangular like the SLM itself.
 
 ```python
-X, Y = fs.grid(1920, 8e-6), fs.grid(1200, 8e-6)
+X, Y = grid(1920, 8e-6), grid(1200, 8e-6)
 ```
 
 ## Beam
 
-The `beam` module gives the field that falls on the SLM, with a flat wavefront and a given power.
+The `beam` module gives the field that falls on the SLM, not its intensity, with a flat wavefront and a given power.
 
 | function | field |
 |---|---|
@@ -42,11 +42,10 @@ changes the field, since $e^{i\phi}$ only sees the phase modulo 2π.
    import matplotlib.pyplot as plt
    import numpy as np
 
-   import fourierslm as fs
-   from fourierslm import phase
+   from fourierslm import grid, phase
 
    lam = 1030e-9
-   X = Y = fs.grid(400, 8e-6)
+   X = Y = grid(400, 8e-6)
    patterns = {
        "lens, f = 1 m": phase.lens(X, Y, lam, 1.0),
        "axicon, 1 mrad": phase.axicon(X, Y, lam, 1e-3),
