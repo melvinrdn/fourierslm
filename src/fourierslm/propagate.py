@@ -61,8 +61,7 @@ def focus(
     X, Y : ndarray
         Coordinates on the SLM [m], from `fourierslm.slm_grid`.
     x, y : ndarray
-        Coordinates at the focus [m], from `fourierslm.focus_grid`, or a centred part of them such as
-        x[np.abs(x) < a] to compute only that window.
+        Coordinates at the focus [m], from `fourierslm.focus_grid`, with or without a window.
     wavelength : float
         Wavelength [m].
     f : float

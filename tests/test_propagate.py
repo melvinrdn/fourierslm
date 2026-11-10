@@ -25,14 +25,14 @@ def analytic(x, y, z, L):
 
 def scan(E, z, half_width=1.6e-3, **kw):
     """Focal plane by focus on ±half_width, then free to the planes z, with its coordinates."""
-    u = x[np.abs(x) <= half_width]
+    u, _ = focus_grid(X, Y, LAM, F, window=2 * half_width)
     return propagate.free(propagate.focus(E, X, Y, u, u, LAM, F, **kw), u[1] - u[0], LAM, z), u
 
 
 @pytest.mark.parametrize("slm_distance", [None, 0.12])
 def test_gaussian_focus(E, slm_distance):
-    u = x[np.abs(x) <= 3 * W0]
-    G = propagate.focus(E, X, Y, u, u, LAM, F, slm_distance)
+    u, v = focus_grid(X, Y, LAM, F, window=6 * W0)
+    G = propagate.focus(E, X, Y, u, v, LAM, F, slm_distance)
     ref = analytic(u, u, 0.0, F if slm_distance is None else slm_distance)
     assert np.allclose(G, ref, rtol=0, atol=1e-11 * np.abs(ref).max())
 
@@ -40,8 +40,10 @@ def test_gaussian_focus(E, slm_distance):
 def test_window_is_the_crop_of_the_plane(E):
     G = propagate.focus(E, X, Y, x, y, LAM, F, 0.12)
     assert G.shape == (len(y), len(x)) == E.shape
-    keep = np.abs(x) < 1e-3
-    assert np.array_equal(propagate.focus(E, X, Y, x[keep], y[keep], LAM, F, 0.12), G[np.ix_(keep, keep)])
+    u, v = focus_grid(X, Y, LAM, F, window=2e-3)
+    keep = np.abs(x) <= 1e-3
+    assert np.array_equal(u, x[keep]) and u[len(u) // 2] == 0
+    assert np.array_equal(propagate.focus(E, X, Y, u, v, LAM, F, 0.12), G[np.ix_(keep, keep)])
 
 
 def test_pad_changes_the_sampling_not_the_field(E):

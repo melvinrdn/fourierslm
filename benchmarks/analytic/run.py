@@ -27,7 +27,6 @@ DOCS = HERE.parents[1] / "docs"
 FIGS = DOCS / "_static" / "benchmark"
 LAM, F, PITCH, W, P = 1030e-9, 0.5, 8e-6, 1.2e-3, 1.0  # 1/e² radius W on the SLM, power P
 X, Y = slm_grid(n=1200, pitch=PITCH)  # the short side of a 1920 × 1200 SLM
-x, y = focus_grid(X, Y, LAM, F)
 W0 = LAM * F / (np.pi * W)
 ZR = np.pi * W0**2 / LAM
 Z = np.linspace(-4, 4, 81) * ZR
@@ -61,7 +60,7 @@ def main():
 
 def scan(E, L):
     """Back focal plane by focus on ±CROP, then free to the planes Z, with its coordinates."""
-    u = x[np.abs(x) <= CROP]
+    u, _ = focus_grid(X, Y, LAM, F, window=2 * CROP)
     return propagate.free(propagate.focus(E, X, Y, u, u, LAM, F, slm_distance=L), u[1] - u[0], LAM, Z), u
 
 
@@ -70,7 +69,7 @@ def accuracy(E):
     lines = ["| SLM–lens distance | method | precision | planes | error |", "|---|---|---|---|---|"]
     for L in L_SLM:
         for dtype, name in ((complex, "complex128"), (np.complex64, "complex64")):
-            u = x[np.abs(x) <= 3 * W0]
+            u, _ = focus_grid(X, Y, LAM, F, window=6 * W0)
             e = err(propagate.focus(E.astype(dtype), X, Y, u, u, LAM, F, slm_distance=L), analytic(u, u, 0.0, L)[0])
             lines.append(f"| {L * 100:.0f} cm | `focus` | {name} | back focal plane | {e:.1e} |")
         num, u = scan(E, L)

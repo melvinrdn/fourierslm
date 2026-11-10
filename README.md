@@ -18,8 +18,8 @@ pip install fourierslm    # or: uv add fourierslm
 
 A Gaussian pulse of 1 mJ and 200 fs on a square of 10 beam radii, a vortex of charge 1, and a lens of 50 cm placed
 30 cm after the SLM. With the peak power, |E|² is the peak intensity in every plane. `focus` gives the field in the
-back focal plane, the Fourier transform of the field on the SLM, on the part of the focal grid kept around the axis.
-`free` then propagates it through the focus.
+back focal plane, the Fourier transform of the field on the SLM, on a window of 3 mm around the axis. `free` then
+propagates it through the focus.
 
 ```python
 import matplotlib.pyplot as plt
@@ -29,13 +29,12 @@ import fourierslm as fs
 
 lam, f, w = 1030e-9, 0.5, 2e-3
 X, Y = fs.slm_grid(size=10 * w)  # 2048 × 2048 points
-x, y = fs.focus_grid(X, Y, lam, f)
+x, y = fs.focus_grid(X, Y, lam, f, window=3e-3)  # ±1.5 mm around the axis
 
 intensity = fs.intensity.gaussian(X, Y, w, power=fs.peak_power(energy=1e-3, duration=200e-15))  # W/m²
 phase = fs.phase.vortex(X, Y, charge=1)
 E_slm = fs.slm_field(intensity, phase)
 
-x = y = x[np.abs(x) < 1.5e-3]  # keep ±1.5 mm around the axis
 E_focus = fs.propagate.focus(E_slm, X, Y, x, y, lam, f, slm_distance=0.3)  # back focal plane
 z = np.linspace(-60e-3, 60e-3, 121)
 I = np.abs(fs.propagate.free(E_focus, x[1] - x[0], lam, z)) ** 2  # W/m², shape (len(z), len(x), len(x))

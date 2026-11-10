@@ -19,7 +19,7 @@ $L = f$, the default. Over a single focus it is small, but across a pattern of s
 
 | function | gives | method |
 |---|---|---|
-| `focus_grid(X, Y, wavelength, f, pad)` | the coordinates in the back focal plane | |
+| `focus_grid(X, Y, wavelength, f, pad, window)` | the coordinates in the back focal plane | |
 | `focus(E, X, Y, x, y, wavelength, f, slm_distance)` | the field on (x, y) | FFT of the padded SLM |
 | `free(E, pitch, wavelength, z)` | the field after free propagation, in one plane or a scan in z | angular spectrum |
 
@@ -29,7 +29,7 @@ $\lambda f/(Np)$ for pixels of pitch $p$. With `pad=2`, the window is the centra
 $\lambda f/p$. With `pad=1`, it is the whole plane at twice the pitch. `focus` reads $N$ back from the pitch of x, so
 the padding is chosen once. It raises an error if x is not a focal grid of X at this wavelength and focal length.
 
-`focus` also takes a centred part of the focal grid, such as `x[np.abs(x) < a]`, and then gives the field on that
+`focus_grid(..., window=a)` keeps only a square of side `a` around the axis, and `focus` then gives the field on that
 window only.
 
 `free` uses the exact transfer function $e^{iz(k_z - k)}$, beyond the paraxial approximation, on a fixed periodic grid.
@@ -37,8 +37,8 @@ Keep the field away from the edges of the grid over the whole propagation.
 
 ## Other planes
 
-To follow the beam through the focus, compute `focus` on a centred part of the focal grid around the beam, and give it
-to `free` with an array of z, measured from the back focal plane. It costs one inverse FFT per plane. The part kept
+To follow the beam through the focus, compute `focus` on a window of the focal grid around the beam, and give it to
+`free` with an array of z, measured from the back focal plane. It costs one inverse FFT per plane. The part kept
 must hold the beam over the whole scan.
 
 ## Example
@@ -60,7 +60,7 @@ distances from the SLM to the lens. It is flat for $L = f$ and curved otherwise.
    intensity = fs.intensity.gaussian(X, Y, w)
    z_R = lam * f**2 / (np.pi * w**2)
 
-   u = x[np.abs(x) < 1e-3]  # ±1 mm around the axis
+   u, _ = fs.focus_grid(X, Y, lam, f, window=2e-3)  # ±1 mm around the axis
    E_slm = fs.slm_field(intensity, fs.phase.vortex(X, Y, 1)).astype(np.complex64)
    z = np.linspace(-3, 3, 121) * z_R
    scan = fs.propagate.free(fs.propagate.focus(E_slm, X, Y, u, u, lam, f), u[1] - u[0], lam, z)

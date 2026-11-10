@@ -43,14 +43,15 @@ def slm_grid(size: float | None = None, n: int = 2048, *, pitch: float | None = 
 
 
 def focus_grid(
-    X: np.ndarray, Y: np.ndarray, wavelength: float, f: float, pad: float = 2
+    X: np.ndarray, Y: np.ndarray, wavelength: float, f: float, pad: float = 2, window: float | None = None
 ) -> tuple[np.ndarray, np.ndarray]:
     """Coordinates at the focus of the lens, on which `propagate.focus` gives the field.
 
     The pitch is λf/(N·pitch), with N the side of the zero-padded FFT, pad·n rounded up to an even FFT-friendly size.
     The n samples around the axis are kept, so the window is n·λf/(N·pitch). With pad 2, the pitch is λf/(2·size) and
     the window is the central half of the plane the SLM reaches, λf/pitch. With pad 1, it is the whole plane at twice
-    the pitch.
+    the pitch. `window` keeps a smaller square around the axis, so that `propagate.focus` computes only that part, as
+    before a scan through the focus by `propagate.free`.
 
     Parameters
     ----------
@@ -62,11 +63,13 @@ def focus_grid(
         Focal length of the lens [m].
     pad : float, default 2
         Zero padding of the FFT, N over n.
+    window : float, optional
+        Side of the square kept around the axis [m], the n samples by default.
 
     Returns
     -------
     x, y : ndarray
-        Coordinates [m], x = y, n samples with the axis on index n // 2.
+        Coordinates [m], x = y, with the axis on index len(x) // 2.
 
     Raises
     ------
@@ -79,6 +82,8 @@ def focus_grid(
     pitch = (X[-1] - X[0]) / (n - 1)
     N = _fft_size(int(np.ceil(pad * n)))
     x = (np.arange(n) - n // 2) * (wavelength * f / (N * pitch))
+    if window is not None:
+        x = x[np.abs(x) <= window / 2]
     return x, x.copy()
 
 
