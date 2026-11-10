@@ -14,15 +14,15 @@ $$
 E(r, z) = E_0\, \frac{q_0}{q_0 + z}\, e^{ikr^2/[2(q_0 + z)]},
 $$
 
-with $E_0 = -i\sqrt{2I_0/(\varepsilon_0 c)}$ the on-axis field in the back focal plane and $I_0 = 2P/(\pi w_0^2)$.
+with $E_0 = -i\sqrt{I_0}$ the on-axis field in the back focal plane and $I_0 = 2P/(\pi w_0^2)$.
 
 `focus` is compared with this field in the back focal plane, and `focus` followed by `free` over the scan, with the SLM
 in the front focal plane and 20 cm closer to the lens.
 
 ## Summary
 
-- `focus` gives the analytic field in the back focal plane to 10⁻⁸ in complex128, the part of the beam cut by the edge
-  of the SLM, and to 10⁻⁷ in complex64.
+- `focus` gives the analytic field in the back focal plane to 3·10⁻⁸ in complex128, the part of the beam cut by the
+  edge of the SLM, and to 2·10⁻⁷ in complex64.
 - `focus` followed by `free` agrees to 10⁻⁶ over ±4 Rayleigh ranges. `free` is exact beyond the paraxial
   approximation, and this is the size of the correction.
 

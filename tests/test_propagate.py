@@ -1,11 +1,11 @@
 import numpy as np
 import pytest
-from scipy.constants import c, epsilon_0
 
-from fourierslm import beam, grid, phase, propagate
+from fourierslm import focus_grid, intensity, phase, propagate, slm_field, slm_grid
 
 LAM, F, PITCH, W, P = 1030e-9, 0.2, 8e-6, 0.4e-3, 2.0
-X, Y = grid(512, PITCH), grid(384, PITCH)
+X, Y = slm_grid(n=512, pitch=PITCH)  # SLM edge at 5.1w
+x, y = focus_grid(X, Y, LAM, F)
 W0 = LAM * F / (np.pi * W)  # waist at the focus
 ZR = np.pi * W0**2 / LAM
 I0 = 2 * P / (np.pi * W0**2)
@@ -13,76 +13,90 @@ I0 = 2 * P / (np.pi * W0**2)
 
 @pytest.fixture(scope="module")
 def E():
-    return beam.gaussian(X, Y, W, P).astype(complex)
+    return slm_field(intensity.gaussian(X, Y, W, P), 0)
 
 
 def analytic(x, y, z, L):
     """Gaussian beam, radius W0 and curvature (1 − L/F)/F in the back focal plane, then q0 → q0 + z."""
     k = 2 * np.pi / LAM
     q0 = 1 / ((1 - L / F) / F + 2j / (k * W0**2))
-    E_f = np.sqrt(2 * I0 / (epsilon_0 * c)) / 1j  # on-axis field in the back focal plane
-    return E_f * q0 / (q0 + z) * np.exp(1j * k * (x[None, :] ** 2 + y[:, None] ** 2) / (2 * (q0 + z)))
+    return np.sqrt(I0) / 1j * q0 / (q0 + z) * np.exp(1j * k * (x[None, :] ** 2 + y[:, None] ** 2) / (2 * (q0 + z)))
 
 
 def scan(E, z, half_width=1.6e-3, **kw):
-    """Focal plane by focus, cropped to ±half_width, then free to the planes z, with the crop coordinates."""
-    G, x, _ = propagate.focus(E, PITCH, LAM, F, **kw)
-    keep = np.abs(x) < half_width
-    u = x[keep]
-    return propagate.free(G[np.ix_(keep, keep)], u[1] - u[0], LAM, z), u
+    """Focal plane by focus on ±half_width, then free to the planes z, with its coordinates."""
+    u = x[np.abs(x) <= half_width]
+    return propagate.free(propagate.focus(E, X, Y, u, u, LAM, F, **kw), u[1] - u[0], LAM, z), u
 
 
 @pytest.mark.parametrize("slm_distance", [None, 0.12])
 def test_gaussian_focus(E, slm_distance):
-    G, x, y = propagate.focus(E, PITCH, LAM, F, slm_distance)
-    sx, sy = np.abs(x) <= 3 * W0, np.abs(y) <= 3 * W0
-    ref = analytic(x[sx], y[sy], 0.0, F if slm_distance is None else slm_distance)
-    assert np.allclose(G[np.ix_(sy, sx)], ref, rtol=0, atol=1e-7 * np.abs(ref).max())  # SLM edge at 3.8w
+    u = x[np.abs(x) <= 3 * W0]
+    G = propagate.focus(E, X, Y, u, u, LAM, F, slm_distance)
+    ref = analytic(u, u, 0.0, F if slm_distance is None else slm_distance)
+    assert np.allclose(G, ref, rtol=0, atol=1e-11 * np.abs(ref).max())
 
 
-def test_grid_is_square():
-    for pad in (2, 1.5):
-        G, x, y = propagate.focus(beam.gaussian(X, Y, W), PITCH, LAM, F, pad=pad)
-        assert G.shape == (len(y), len(x)) and len(x) == len(y) >= pad * len(X) and np.array_equal(x, y)
-        assert np.isclose(x[1] - x[0], LAM * F / (len(x) * PITCH))
+def test_window_is_the_crop_of_the_plane(E):
+    G = propagate.focus(E, X, Y, x, y, LAM, F, 0.12)
+    assert G.shape == (len(y), len(x)) == E.shape
+    keep = np.abs(x) < 1e-3
+    assert np.array_equal(propagate.focus(E, X, Y, x[keep], y[keep], LAM, F, 0.12), G[np.ix_(keep, keep)])
 
 
-def test_odd_shape():
-    Xo, Yo = grid(301, PITCH), grid(255, PITCH)
+def test_pad_changes_the_sampling_not_the_field(E):
+    """pad 1 has twice the pitch of pad 2, so every other sample of pad 2 is a sample of pad 1."""
+    x1, y1 = focus_grid(X, Y, LAM, F, pad=1)
+    G1, G2 = propagate.focus(E, X, Y, x1, y1, LAM, F), propagate.focus(E, X, Y, x, y, LAM, F)
+    n = len(X)
+    s1, s2 = slice(n // 4, 3 * n // 4), slice(0, n, 2)
+    assert np.allclose(x1[s1], x[s2], rtol=1e-12, atol=0)
+    assert np.allclose(G1[s1, s1], G2[s2, s2], rtol=0, atol=1e-12 * np.abs(G2).max())
+
+
+def test_focus_rejects_a_wrong_grid(E):
+    x_other, _ = focus_grid(X, Y, 800e-9, F)
+    for xs, ys in ((x_other, x_other), (x, -y), (x[:200], y[:200])):
+        with pytest.raises(ValueError):
+            propagate.focus(E, X, Y, xs, ys, LAM, F)
+
+
+def test_odd_n():
+    Xo, Yo = slm_grid(n=301, pitch=PITCH)
     w, w0 = 0.2e-3, LAM * F / (np.pi * 0.2e-3)
     for pad in (2, 1.5):
-        G, x, y = propagate.focus(beam.gaussian(Xo, Yo, w), PITCH, LAM, F, pad=pad)
-        assert len(x) % 2 == 0
-        I = beam.intensity(G)
-        assert np.allclose(I, I.max() * np.exp(-2 * (x[None, :] ** 2 + y[:, None] ** 2) / w0**2), atol=1e-6 * I.max())
+        xo, yo = focus_grid(Xo, Yo, LAM, F, pad)
+        I = np.abs(propagate.focus(slm_field(intensity.gaussian(Xo, Yo, w), 0), Xo, Yo, xo, yo, LAM, F)) ** 2
+        assert I.shape == (301, 301)
+        assert np.allclose(I, I.max() * np.exp(-2 * (xo[None, :] ** 2 + yo[:, None] ** 2) / w0**2), atol=1e-6 * I.max())
 
 
-def test_focus_conserves_power(E):
-    for pad in (2, 1.5):
-        G, x, y = propagate.focus(E, PITCH, LAM, F, 0.12, pad)
-        p_slm = beam.intensity(E).sum() * PITCH**2
-        assert np.isclose(beam.intensity(G).sum() * (x[1] - x[0]) * (y[1] - y[0]), p_slm, rtol=1e-12)
-        assert np.isclose(p_slm, P, rtol=1e-6)
+@pytest.mark.parametrize("pad", [1, 2])
+def test_focus_conserves_power(E, pad):
+    xp, yp = focus_grid(X, Y, LAM, F, pad)
+    G = propagate.focus(E, X, Y, xp, yp, LAM, F, 0.12)
+    p_slm = np.sum(np.abs(E) ** 2) * PITCH**2
+    assert np.isclose(np.sum(np.abs(G) ** 2) * (xp[1] - xp[0]) ** 2, p_slm, rtol=1e-12)
+    assert np.isclose(p_slm, P, rtol=1e-6)
 
 
 def test_focus_matches_free_space_and_lens():
     """SLM at L ≠ f: FT with curvature against angular spectrum, thin lens, angular spectrum."""
     lam, L, n, N = 1e-6, 0.03, 2048, 900
     f = N * PITCH**2 / lam  # the pitch λf/(N·pitch) at the focus is then the SLM pitch
-    Xs = grid(n, PITCH)
-    E = beam.gaussian(Xs, Xs, 0.25e-3) * np.exp(1j * phase.vortex(Xs, Xs, 1))
-    G = propagate.free(E, PITCH, lam, L) * np.exp(1j * phase.lens(Xs, Xs, lam, f))
+    Xs, Ys = slm_grid(n=n, pitch=PITCH)
+    E = slm_field(intensity.gaussian(Xs, Ys, 0.25e-3), phase.vortex(Xs, Ys, 1))
+    G = propagate.free(E, PITCH, lam, L) * np.exp(1j * phase.lens(Xs, Ys, lam, f))
     G = propagate.free(G, PITCH, lam, f)
     c = slice(n // 2 - 128, n // 2 + 128)  # the beam is zero outside
-    M, x, _ = propagate.focus(E[c, c], PITCH, lam, f, slm_distance=L, pad=N / 256)
-    assert np.isclose(x[1] - x[0], PITCH)
-    s, sm = slice(n // 2 - 40, n // 2 + 41), slice(N // 2 - 40, N // 2 + 41)
-    assert np.abs(G[s, s] - M[sm, sm]).max() < 1e-3 * np.abs(M).max()
+    s = slice(n // 2 - 40, n // 2 + 41)
+    M = propagate.focus(E[c, c], Xs[c], Ys[c], Xs[s], Ys[s], lam, f, slm_distance=L)
+    assert np.abs(G[s, s] - M).max() < 1e-3 * np.abs(M).max()
 
 
 @pytest.mark.parametrize("slm_distance", [None, 0.12])
 def test_free_scan_continues_focus(E, slm_distance):
-    """A z scan by free from the cropped focal plane, against the analytic beam."""
+    """A z scan by free from the focal window, against the analytic beam."""
     z = np.linspace(-2, 2, 5) * ZR
     fields, u = scan(E, z, slm_distance=slm_distance)
     s = np.abs(u) <= 3 * W0
@@ -94,7 +108,7 @@ def test_z_scan_intensity_and_gouy_phase(E):
     z = np.linspace(-3 * ZR, 3 * ZR, 13)
     fields, u = scan(E, z, half_width=2e-3)
     on_axis = fields[:, len(u) // 2, len(u) // 2]
-    assert np.allclose(beam.intensity(on_axis), I0 / (1 + (z / ZR) ** 2), rtol=5e-6)  # free is not paraxial
+    assert np.allclose(np.abs(on_axis) ** 2, I0 / (1 + (z / ZR) ** 2), rtol=5e-6)  # free is not paraxial
     assert np.allclose(np.angle(on_axis * np.exp(1j * (np.pi / 2 + np.arctan(z / ZR)))), 0, atol=2e-6)
 
 
@@ -126,8 +140,8 @@ def test_free_zero_distance(E):
 
 def test_complex64(E):
     E32 = E.astype(np.complex64)
-    M = propagate.focus(E32, PITCH, LAM, F, slm_distance=0.12)[0]
+    M = propagate.focus(E32, X, Y, x, y, LAM, F, slm_distance=0.12)
     assert M.dtype == np.complex64
-    ref = propagate.focus(E, PITCH, LAM, F, slm_distance=0.12)[0]
+    ref = propagate.focus(E, X, Y, x, y, LAM, F, slm_distance=0.12)
     assert np.abs(M - ref).max() < 1e-5 * np.abs(ref).max()
     assert propagate.free(E32, PITCH, LAM, 0.01).dtype == np.complex64

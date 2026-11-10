@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-from fourierslm import beam, grid, phase, propagate
+from fourierslm import focus_grid, intensity, phase, propagate, slm_field, slm_grid
 
 LAM, F, PITCH = 1030e-9, 0.2, 8e-6
-X = Y = grid(512, PITCH)
+X, Y = slm_grid(n=512, pitch=PITCH)
 
 
 def test_lens_sign():
@@ -17,9 +17,9 @@ def test_lens_sign():
 @pytest.mark.parametrize(("azimuth", "axis"), [(0.0, "x"), (np.pi / 2, "y")])
 def test_grating_steers_the_focus(azimuth, axis):
     angle = 2e-4
-    E = beam.gaussian(X, Y, 0.4e-3) * np.exp(1j * phase.grating(X, Y, LAM, angle, azimuth))
-    G, x, y = propagate.focus(E, PITCH, LAM, F)
-    I = np.abs(G) ** 2
+    E = slm_field(intensity.gaussian(X, Y, 0.4e-3), phase.grating(X, Y, LAM, angle, azimuth))
+    x, y = focus_grid(X, Y, LAM, F)
+    I = np.abs(propagate.focus(E, X, Y, x, y, LAM, F)) ** 2
     centroid = np.sum(I * (x[None, :] if axis == "x" else y[:, None])) / I.sum()
     assert np.isclose(centroid, F * np.sin(angle), rtol=1e-3)
 

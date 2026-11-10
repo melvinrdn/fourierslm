@@ -3,14 +3,17 @@
 ## fourierslm
 
 ```{eval-rst}
-.. autofunction:: fourierslm.grid
+.. autofunction:: fourierslm.slm_grid
+.. autofunction:: fourierslm.focus_grid
+.. autofunction:: fourierslm.slm_field
+.. autofunction:: fourierslm.peak_power
 ```
 
-## fourierslm.beam
+## fourierslm.intensity
 
 ```{eval-rst}
-.. automodule:: fourierslm.beam
-   :members: gaussian, flattop, intensity
+.. automodule:: fourierslm.intensity
+   :members: gaussian, flattop
 ```
 
 ## fourierslm.phase

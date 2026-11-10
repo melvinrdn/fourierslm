@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fourierslm"
-version = "0.2.0"
-description = "Fourier optics of a phase-only SLM: input beams, phase patterns and propagation to the focus of a lens"
+version = "0.3.0"
+description = "Fourier optics of a phase-only SLM: beam intensities, phase patterns and propagation to the focus of a lens"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"

@@ -2,27 +2,36 @@
 
 ## Grid
 
-The SLM is a grid of square pixels. `grid(n, pitch)` gives the coordinates of its `n` pixels along one axis, with
-the optical axis on pixel `n // 2`. The two axes are separate, so the grid can be rectangular like the SLM itself.
+The SLM is a square of n × n pixels. `slm_grid(size, n=2048)` gives the coordinates X = Y of the pixels, with the
+optical axis on pixel `n // 2`. The pitch is size/n. Give `pitch` instead of `size` when the SLM pixels matter, as for
+stochastic holograms or quantization.
 
 ```python
-X, Y = grid(1920, 8e-6), grid(1200, 8e-6)
+X, Y = fs.slm_grid(size=20e-3)  # a square of 20 mm, 2048 points
+X, Y = fs.slm_grid(n=1200, pitch=8e-6)  # 1200 pixels of 8 µm
 ```
 
-## Beam
+The size sets the detail at the focus and n sets the field of view, as the [quickstart](../quickstart.md) explains.
 
-The `beam` module gives the field that falls on the SLM, not its intensity, with a flat wavefront and a given power.
+## Intensity
 
-| function | field |
+The `intensity` module gives the intensity that falls on the SLM, in W/m², with a given power. For a pulse, give the
+peak power, `peak_power(energy, duration)` for a Gaussian pulse, to get the peak intensity.
+
+| function | intensity |
 |---|---|
-| `gaussian(X, Y, w, power)` | Gaussian of radius `w` at 1/e² of the intensity |
+| `gaussian(X, Y, w, power)` | Gaussian of radius `w` at 1/e² |
 | `flattop(X, Y, radius, power)` | uniform disk |
-| `intensity(E)` | $\frac{1}{2}\varepsilon_0 c\vert E\vert^2$ |
+
+## Field
+
+`slm_field(intensity, phase)` gives the field after the SLM, $E = \sqrt{I}\,e^{i\phi}$, with a flat wavefront under
+the phase pattern. It is in √(W/m²), so $|E|^2$ is the intensity.
 
 ## Phase patterns
 
-The `phase` module gives the phase the SLM writes on the beam. The patterns are continuous, so they add, and the field
-after the SLM is the beam times $e^{i\phi}$.
+The `phase` module gives the phase the SLM writes on the beam. The patterns are continuous, so they add, and
+`slm_field` puts their sum on the beam.
 
 | function | phase |
 |---|---|
@@ -42,10 +51,10 @@ changes the field, since $e^{i\phi}$ only sees the phase modulo 2π.
    import matplotlib.pyplot as plt
    import numpy as np
 
-   from fourierslm import grid, phase
+   from fourierslm import phase, slm_grid
 
    lam = 1030e-9
-   X = Y = grid(400, 8e-6)
+   X, Y = slm_grid(n=400, pitch=8e-6)
    patterns = {
        "lens, f = 1 m": phase.lens(X, Y, lam, 1.0),
        "axicon, 1 mrad": phase.axicon(X, Y, lam, 1e-3),

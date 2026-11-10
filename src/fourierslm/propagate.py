@@ -7,9 +7,9 @@ field on the SLM times a curvature, Goodman (5-19),
             = k/(if) · exp[ik(1 − L/f)(x² + y²)/(2f)] · E(k_X = kx/f, k_Y = ky/f),
 
 with the unitary FT E(k_X, k_Y) = 1/(2π) ∬ E(X, Y) exp[−i(k_X X + k_Y Y)] dX dY. The other planes follow by `free`.
-The plane wave is exp[i(kz − ωt)], fields are complex analytic fields [V/m], and the constant phase exp[ik(L + f)] is
-left out. Arrays have the shape (len(Y), len(X)). Complex64 fields are propagated in complex64, which is about twice
-as fast, and FFTs run on every core.
+The plane wave is exp[i(kz − ωt)], fields are in √(W/m²) so that ``abs(E)**2`` is the intensity, and the constant phase
+exp[ik(L + f)] is left out. Grids are square, and arrays have the shape (n, n). Complex64 fields are propagated in
+complex64, which is about twice as fast, and FFTs run on every core.
 """
 
 import numpy as np
@@ -39,54 +39,68 @@ def _fft_size(n):
 
 
 def focus(
-    E: np.ndarray, pitch: float, wavelength: float, f: float, slm_distance: float | None = None, pad: float = 2
-) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Field in the back focal plane of the lens.
+    E: np.ndarray,
+    X: np.ndarray,
+    Y: np.ndarray,
+    x: np.ndarray,
+    y: np.ndarray,
+    wavelength: float,
+    f: float,
+    slm_distance: float | None = None,
+) -> np.ndarray:
+    """Field in the back focal plane of the lens, on the grid of `fourierslm.focus_grid`.
 
     The FT of the field on the SLM, with the prefactor 1/(iλf) and the curvature exp[ik(1 − L/f)(x² + y²)/(2f)], by one
-    FFT of the SLM field zero-padded to N × N. The grid spans λf/pitch, the whole plane the SLM reaches, with the pitch
-    λf/(N·pitch) on both axes.
+    FFT of the SLM field zero-padded to N × N. N is read from the pitch λf/(N·pitch) of x, so the padding is chosen
+    once, in `fourierslm.focus_grid`.
 
     Parameters
     ----------
     E : ndarray
-        Field on the SLM [V/m], on the pixels of `fourierslm.grid`.
-    pitch : float
-        Pixel pitch of the SLM [m].
+        Field on the SLM [√(W/m²)], shape (n, n).
+    X, Y : ndarray
+        Coordinates on the SLM [m], from `fourierslm.slm_grid`.
+    x, y : ndarray
+        Coordinates at the focus [m], from `fourierslm.focus_grid`, or a centred part of them such as
+        x[np.abs(x) < a] to compute only that window.
     wavelength : float
         Wavelength [m].
     f : float
         Focal length of the lens [m].
     slm_distance : float, optional
         Distance L from the SLM to the lens [m], f by default.
-    pad : float, default 2
-        Zero padding, N over the larger side of the SLM, rounded up to an even FFT-friendly size.
 
     Returns
     -------
-    E_focus : ndarray
-        Field [V/m], shape (N, N).
-    x, y : ndarray
-        Its coordinates [m], the same on both axes, with the axis on index N // 2.
+    ndarray
+        Field [√(W/m²)], shape (len(y), len(x)).
+
+    Raises
+    ------
+    ValueError
+        If the grids are not square, or x is not a focal grid of X at this wavelength and focal length.
     """
+    if not (np.array_equal(X, Y) and np.array_equal(x, y)):
+        raise ValueError("the grids must be square, Y = X and y = x")
+    n, m = len(X), len(x)
+    pitch = (X[-1] - X[0]) / (n - 1)
+    N = round(wavelength * f / (pitch * (x[1] - x[0])))
+    grid = (np.arange(m) - m // 2) * wavelength * f / (N * pitch)
+    if N % 2 or N < max(n, m) or not np.allclose(x, grid, rtol=1e-9, atol=0):
+        raise ValueError("x is not a focal grid of X at this wavelength and focal length, make it with focus_grid")
     k = 2 * np.pi / wavelength
     L = f if slm_distance is None else slm_distance
     dtype = _dtype(E)
-    ny, nx = E.shape
-    N = _fft_size(int(np.ceil(pad * max(ny, nx))))
-    y0, x0 = N // 2 - ny // 2, N // 2 - nx // 2
-    x = (np.arange(N) - N // 2) * wavelength * f / (N * pitch)
-    sign = (-1.0) ** np.arange(N)  # with the signs after the FFT, puts the axis on index N // 2 in both planes
-    after = ((-1.0) ** (np.arange(N) + N // 2) * np.exp(1j * k * (1 - L / f) * x**2 / (2 * f))).astype(dtype)
+    a, b = N // 2 - n // 2, N // 2 - m // 2  # first SLM pixel and first focal sample in the N × N grid
+    sign = (-1.0) ** np.arange(a, a + n)  # with the signs after the FFT, puts the axis on index N // 2 in both planes
+    after = ((-1.0) ** (np.arange(b, b + m) + N // 2) * np.exp(1j * k * (1 - L / f) * x**2 / (2 * f))).astype(dtype)
 
     G = np.zeros((N, N), dtype)
-    view = G[y0 : y0 + ny, x0 : x0 + nx]
-    np.multiply(E, sign[y0 : y0 + ny, None], out=view)
-    view *= (sign[x0 : x0 + nx] * pitch**2 / (1j * wavelength * f)).astype(dtype)
-    G = scipy.fft.fft2(G, overwrite_x=True, workers=-1)
-    G *= after[:, None]
-    G *= after
-    return G, x, x.copy()
+    view = G[a : a + n, a : a + n]
+    np.multiply(E, sign[:, None], out=view)
+    view *= (sign * pitch**2 / (1j * wavelength * f)).astype(dtype)
+    G = scipy.fft.fft2(G, overwrite_x=True, workers=-1)[b : b + m, b : b + m]
+    return G * after[:, None] * after
 
 
 def free(E: np.ndarray, pitch: float, wavelength: float, z: float | np.ndarray, bandlimit: bool = True) -> np.ndarray:
@@ -99,7 +113,7 @@ def free(E: np.ndarray, pitch: float, wavelength: float, z: float | np.ndarray, 
     Parameters
     ----------
     E : ndarray
-        Field [V/m].
+        Field [√(W/m²)].
     pitch : float
         Pixel pitch [m].
     wavelength : float
@@ -113,7 +127,7 @@ def free(E: np.ndarray, pitch: float, wavelength: float, z: float | np.ndarray, 
     Returns
     -------
     ndarray
-        Field [V/m] on the same grid, shape (ny, nx) like E, or (len(z), ny, nx) for a scan.
+        Field [√(W/m²)] on the same grid, shape (ny, nx) like E, or (len(z), ny, nx) for a scan.
     """
     k = 2 * np.pi / wavelength
     dtype = _dtype(E)
